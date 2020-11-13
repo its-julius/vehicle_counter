@@ -42,12 +42,17 @@ class TwoDimensionalMap:
             raise ValueError('Destination Reference Points shape should be (4, 2)')
         self.matrix = cv2.getPerspectiveTransform(np.array(src_points, dtype=np.float32),
                                                   np.array(dst_points, dtype=np.float32))
+        self.matrix = np.array(self.matrix)
 
     def transformPoint(self, point):
         if type(point) is tuple and len(point) == 2:
             point = [point]
         elif type(point) is tuple and len(point) != 2:
             raise ValueError('Point should be tuple (x,y)')
+        if not bool(self.matrix):
+            raise ValueError('Transformation matrix is empty')
+        elif self.matrix.shape != (3, 3):
+            raise ValueError('Matrix size error! Current size: ' + str(self.matrix.shape))
         result = []
         for p in point:
             x_temp = (self.matrix[0, 0] * p[0] + self.matrix[0, 1] * p[1] + self.matrix[0, 2]) / (
@@ -115,6 +120,7 @@ class TwoDimensionalMap:
         config = ConfigParser()
         config.read(os.path.join(path, fname))
         temp = config.get('default', 'line').split('\n')
+        self.imaginary_line = [int(x.split(' ')) for x in temp]
         # temp = [int(x) for x in temp]
         # self.matrix = np.array(temp).reshape((3, 3))
         return True
@@ -129,29 +135,82 @@ class TwoDimensionalMap:
     def _track(self):
         # for search
         past_index_to_remove = []
-        for num, i in enumerate(np.array(self.present)[:, 1]):
-            if i in np.array(self.past)[:, 1]:
-                idx = list(np.array(self.past)[:, 1]).index(i)
-                present_point = self.present[num][0]
-                past_point = self.past[idx][0]
-                past_index_to_remove.append(idx)
-                # Draw line?
-                # Check if the present point is in the certain box
-                self._check_intersection([present_point, past_point])
-            elif i in np.array(self.double_past)[:, 1]:
-                idx = list(np.array(self.double_past)[:, 1]).index(i)
-                present_point = self.present[num][0]
-                past_point = self.double_past[idx][0]
-                self._check_intersection([present_point, past_point])
+        if self.past is not None and self.double_past is not None:
+            for num, i in enumerate(np.array(self.present)[:, 1]):
+                if i in np.array(self.past)[:, 1]:
+                    idx = list(np.array(self.past)[:, 1]).index(i)
+                    present_point = self.present[num][0]
+                    past_point = self.past[idx][0]
+                    past_index_to_remove.append(idx)
+                    # Draw line?
+                    cv2.line(self.source, tuple(present_point), tuple(past_point), (0, 0, 255), 3)
+                    # Check if the present point is in the certain box
+                    res, n = self._check_intersection([past_point, present_point])
+                    if res:
+                        print('Intersect Detected: ' + str(n))  # todo: update log (timestamp, imaginary line number, vehicle type)
+                elif i in np.array(self.double_past)[:, 1]:
+                    idx = list(np.array(self.double_past)[:, 1]).index(i)
+                    present_point = self.present[num][0]
+                    past_point = self.double_past[idx][0]
+                    cv2.line(self.source, tuple(present_point), tuple(past_point), (0, 0, 255), 3)
+                    res, n = self._check_intersection([past_point, present_point])
+                    if res:
+                        print('Intersect Detected: ' + str(n))  # todo: update log (timestamp, imaginary line number, vehicle type)
         for i in past_index_to_remove:
             self.past.pop(i)
         self.double_past = self.past
         self.past = self.present
         # for search - end
 
-    def _check_intersection(self, line):
+    def _check_intersection2(self, line):
         if self.imaginary_line:
+            intersection = []
             for num, i in enumerate(self.imaginary_line):
                 # Check if intersect
                 # if True, then increase counter for imaginary_line idx and BREAK
-                None
+                # https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
+                p = np.array([i[0], i[1]])
+                r = np.array([i[2]-i[0], i[3]-i[1]])
+                q = np.array(line[0])
+                s = np.array(line[1] - line[0])
+                rxs = np.cross(r, s)
+                if rxs == 0:
+                    intersection.append(False)  # Collinear or Parallel
+                else:
+                    t = np.cross((q - p), s) / rxs
+                    u = np.cross((q - p), r) / rxs
+                    if 0 <= t <= 1 and 0 <= u <= 1:
+                        intersection.append(True)  # Intersect (two line segments meet at the point p+tr = q+us
+                    else:
+                        intersection.append(False)  # Do not intersect (two line segments are not parallel but do not intersect)
+            if len(intersection) == len(self.imaginary_line):
+                return intersection
+            else:
+                raise ValueError('check intersection failed.')
+        else:
+            raise ValueError('no imaginary line detected.')
+
+    def _check_intersection(self, line):
+        if self.imaginary_line:
+            intersection = []
+            for num, i in enumerate(self.imaginary_line):
+                # Check if intersect
+                # if True, then increase counter for imaginary_line idx and BREAK
+                # https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
+                p = np.array(i[0])
+                r = np.array(i[1] - i[0])
+                q = np.array(line[0])
+                s = np.array(line[1] - line[0])
+                rxs = np.cross(r, s)
+                if rxs == 0:
+                    continue  # Collinear or Parallel
+                else:
+                    t = np.cross((q - p), s) / rxs
+                    u = np.cross((q - p), r) / rxs
+                    if 0 < t <= 1 and 0 < u <= 1:
+                        return True, num # Intersect (two line segments meet at the point p+tr = q+us
+                    else:
+                        continue  # Do not intersect (two line segments are not parallel but do not intersect)
+            return False, -1
+        else:
+            raise ValueError('no imaginary line detected.')
