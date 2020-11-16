@@ -9,6 +9,7 @@ import cv2
 import torch
 import torch.backends.cudnn as cudnn
 from numpy import random
+from mytracking_sort import MyTrackingSort
 
 from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages
@@ -25,6 +26,8 @@ from two_dim_map import TwoDimensionalMap
 vehicles = ['person', 'bicycle', 'car', 'motorcycle', 'bus', 'truck']
 vehicle_color = {'person': (255, 0, 0), 'bicycle': (0, 255, 0), 'car': (0, 0, 255),
                  'motorcycle': (255, 255, 0), 'bus': (255, 0, 255), 'truck': (0, 255, 255)}
+is_deep_sort = True
+is_sort = False
 
 
 def draw_boxes(img, bbox, identities=None, offset=(0, 0)):
@@ -50,14 +53,21 @@ def detect(save_img=False):
         opt.save_dir, opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size
     webcam = source.isnumeric() or source.startswith(('rtsp://', 'rtmp://', 'http://')) or source.endswith('.txt')
 
+    # Initialize SORT
+    if is_sort:
+        mt = MyTrackingSort(lenRecord=30, distance_th=0.005, time_th=1)
+        mt.init_sort()
+
     # Initialize Deep SORT
-    cfg = get_config()
-    cfg.merge_from_file('deep_sort/configs/deep_sort.yaml')
-    deepsort = DeepSort('deep_sort/deep_sort/deep/checkpoint/ckpt.t7',
-                        max_dist=cfg.DEEPSORT.MAX_DIST, min_confidence=cfg.DEEPSORT.MIN_CONFIDENCE,
-                        nms_max_overlap=cfg.DEEPSORT.NMS_MAX_OVERLAP, max_iou_distance=cfg.DEEPSORT.MAX_IOU_DISTANCE,
-                        max_age=70, n_init=cfg.DEEPSORT.N_INIT, nn_budget=cfg.DEEPSORT.NN_BUDGET,
-                        use_cuda=True)
+    if is_deep_sort:
+        cfg = get_config()
+        cfg.merge_from_file('deep_sort/configs/deep_sort.yaml')
+        deepsort = DeepSort('deep_sort/deep_sort/deep/checkpoint/ckpt.t7',
+                            max_dist=cfg.DEEPSORT.MAX_DIST, min_confidence=cfg.DEEPSORT.MIN_CONFIDENCE,
+                            nms_max_overlap=cfg.DEEPSORT.NMS_MAX_OVERLAP,
+                            max_iou_distance=cfg.DEEPSORT.MAX_IOU_DISTANCE,
+                            max_age=70, n_init=cfg.DEEPSORT.N_INIT, nn_budget=cfg.DEEPSORT.NN_BUDGET,
+                            use_cuda=True)
     past_box = {}
 
     # Initialize
@@ -74,7 +84,6 @@ def detect(save_img=False):
     ref_point = np.float32([[660, 485], [960, 510], [90, 835], [835, 940]])
     dst_point = np.float32([[900, 815], [1300, 815], [900, 1265], [1300, 1265]])
     map2d.setTransformation(ref_point, dst_point)
-    # matrix = map2d.matrix
 
     # Load model
     model = attempt_load(weights, map_location=device)  # load FP32 model
@@ -133,11 +142,10 @@ def detect(save_img=False):
         # Process detections
         for i, det in enumerate(pred):  # detections per image
 
-            # ~ Record each center point of detections
+            # Record each center point of detections
             cp_det = []
 
             map_tracking = np.ones(shape=(1080, 1920, 3), dtype=np.uint8) * 255
-            # ~ Set 2D Map (width, height)
             map2d.setWH(1920, 1380)
 
             if webcam:  # batch_size >= 1
@@ -158,32 +166,23 @@ def detect(save_img=False):
                     n = (det[:, -1] == c).sum()  # detections per class
                     s += '%g %ss, ' % (n, names[int(c)])  # add to string
 
-                bbox_xywh = []  # List of XYWH from YOLOv5
-                confs = []  # List of Confidence from YOLOv5
-
-                my_detection_list = []
+                bbox_xywh = []
+                confs = []
 
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
-                    # # ~ Convert XYXY format to XYWH format
-                    # xywh = xyxy2xywh(torch.tensor(xyxy).view(1, 4))
-                    # Append to cp_det
+                    # Convert X,Y X,Y format to X,Y W,H
+                    xywh = xyxy2xywh(torch.tensor(xyxy).view(1, 4))
+                    # Append center point to cp_det
                     cp_det.append([int(xywh[0, 0]), int(xywh[0, 1])])
 
                     if names[int(cls)] in vehicles:
                         # Adapt detections to Deep SORT input format
-                        # img_h, img_w, _ = im0.shape
-                        # x_c, y_c, bbox_w, bbox_h = bbox_rel(img_w, img_h, *xyxy)
-                        # obj = [x_c, y_c, bbox_w, bbox_h]
-                        # xyxy_value = [xyxy[0].item(), xyxy[1].item(), xyxy[2].item(), xyxy[3].item()]
-                        # xywh_value = xyxy_to_xywh(xyxy_value)
-
-                        # ~ Convert XYXY format to XYWH format
                         xywh = xyxy2xywh(torch.tensor(xyxy).view(1, 4))
-                        bbox_xywh.append(xywh)
+                        bbox_xywh.append(np.array(xywh[0]))
                         confs.append([conf.item()])
 
-                        # ~ Draw Detection Point
+                        # new_cp = map2d.transformPoint((int(xywh[0, 0]), int(xywh[0, 1])))
                         map2d.drawCircle((int(xywh[0, 0]), int(xywh[0, 1])), vehicle_color[names[int(cls)]])
 
                         if save_txt:  # Write to file
@@ -198,39 +197,66 @@ def detect(save_img=False):
 
                 present_box = {}
 
+                # SORT
+                if is_sort:
+                    boxes = []
+                    for box in bbox_xywh:
+                        boxes.append(xywh_to_xyxy(box))
+                    ts = time.time()
+                    tracker = mt.update(boxes)
+                    mt.get_tracker(tracker, ts)
+                    trackDict = mt.get_array()
+                    # Visualization Detection
+                    for box in boxes:
+                        cv2.rectangle(im0, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (255, 255, 0), 2)
+                    # Visualization Tracking
+                    for objectId in list(trackDict):
+                        try:
+                            bbox = np.array(trackDict[objectId])[-1, 1]
+                        except:
+                            bbox = np.array(trackDict[objectId])[0, 1]
+                        # vis tracker bbox
+                        cv2.rectangle(im0, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])),
+                                      (0, 255, 255), 3)
+                        # vis id
+                        cv2.putText(im0, str(objectId), (int(bbox[0]), int(bbox[1])), 0, 5e-3 * 100, (0, 255, 0), 2)
+                        arrCentroid = np.array(trackDict[objectId])[:, 2]
+                        # vis line tracker obj
+                        for i, v in enumerate(arrCentroid):
+                            if i > 1:
+                                cv2.line(map_tracking, (int(arrCentroid[i][0]), int(arrCentroid[i][1])),
+                                         (int(arrCentroid[i - 1][0]), int(arrCentroid[i - 1][1])), (0, 255, 0), 2)
+
                 # Deep SORT
-                xywhs = torch.Tensor(bbox_xywh)
-                confss = torch.Tensor(confs)
-                # Pass detection to Deep Sort
-                outputs = deepsort.update(xywhs, confss, im0)
-                # print(outputs)
-                # Draw boxes for visualization
-                if len(outputs) > 0:
-                    bbox_xyxy = outputs[:, :4]
-                    identities = outputs[:, -1]
-                    for j, box in enumerate(bbox_xyxy):
-                        id_temp = identities[j]
-                        temp = xyxy_to_xywh(box)
-                        present_box[id_temp] = [temp[0], temp[1]]
-                    draw_boxes(im0, bbox_xyxy, identities)
-                    for key in present_box:
-                        cv2.circle(map_tracking, tuple(present_box[key]), 3, (0, 255, 0), 3)
-                    for key in present_box:
-                        if key in past_box:
-                            # Draw Line?
-                            cv2.line(map_tracking, tuple(past_box[key]), tuple(present_box[key]), (0, 0, 255), 3)
-                            # todo: check if the line intersects with imaginary line
+                if is_deep_sort:
+                    xywhs = torch.Tensor(bbox_xywh)
+                    confss = torch.Tensor(confs)
+                    # Pass detection to Deep Sort
+                    outputs = deepsort.update(xywhs, confss, im0)
+                    # print(outputs)
+                    # Draw boxes for visualization
+                    if len(outputs) > 0:
+                        bbox_xyxy = outputs[:, :4]
+                        identities = outputs[:, -1]
+                        for j, box in enumerate(bbox_xyxy):
+                            id_temp = identities[j]
+                            temp = xyxy_to_xywh(box)
+                            present_box[id_temp] = [temp[0], temp[1]]
+                        draw_boxes(im0, bbox_xyxy, identities)
+                        for key in present_box:
+                            cv2.circle(map_tracking, tuple(present_box[key]), 3, (0, 255, 0), 3)
+                        for key in present_box:
+                            if key in past_box:
+                                # Draw Line?
+                                cv2.line(map_tracking, tuple(past_box[key]), tuple(present_box[key]), (0, 0, 255), 3)
+                                # todo: check if the line intersects with imaginary line
+
                 past_box = present_box
 
             # Print time (inference + NMS)
             t3 = time.time()
             print('%sDone. (%.3fs)' % (s, t2 - t1))
 
-            # Perspective Transform
-            # ref_point = np.float32([[660, 485], [960, 510], [90, 835], [835, 940]])
-            # dst_point = np.float32([[900, 615], [1300, 615], [900, 1065], [1300, 1065]])
-            # dst_point = np.float32([[0, 0], [400, 0], [0, 450], [400, 450]])
-            # matrix = cv2.getPerspectiveTransform(ref_point, dst_point)
             perspective = cv2.warpPerspective(im0, map2d.matrix, (1920, 1280))
             # Plot transformed center points
             # cp_det = np.asanyarray(cp_det)

@@ -49,7 +49,7 @@ class TwoDimensionalMap:
             point = [point]
         elif type(point) is tuple and len(point) != 2:
             raise ValueError('Point should be tuple (x,y)')
-        if not bool(self.matrix):
+        if len(self.matrix) == 0:
             raise ValueError('Transformation matrix is empty')
         elif self.matrix.shape != (3, 3):
             raise ValueError('Matrix size error! Current size: ' + str(self.matrix.shape))
