@@ -130,8 +130,19 @@ def detect(save_img=False):
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
 
+        # DEBUG
+        # print('pred type: ', type(pred))
+        # print('len(pred): ', len(pred))
+        # print('pred: ', pred)
+        # DEBUG
+
         # Process detections
         for i, det in enumerate(pred):  # detections per image
+
+            # DEBUG
+            # print('det type: ', type(det))
+            # print('det: ', det)
+            # DEBUG
 
             # Record each center point of detections
             cp_det = []
@@ -153,6 +164,10 @@ def detect(save_img=False):
                 p, s, im0 = path[i], '%g: ' % i, im0s[i].copy()
             else:
                 p, s, im0 = path, '', im0s
+
+            # DEBUG
+            print(im0.shape)
+            # DEBUG
 
             save_path = str(Path(out) / Path(p).name)
             txt_path = str(Path(out) / Path(p).stem) + ('_%g' % dataset.frame if dataset.mode == 'video' else '')
@@ -212,10 +227,18 @@ def detect(save_img=False):
                             plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
                 present_box = {}
+                # DEBUG
+                # print('det type: ', type(det))
+                # det = det.cpu().data.numpy()
+                # print('det type: ', type(det))
+                # print(det)
+                # DEBUG
 
                 # Deep SORT
                 xywhs = torch.Tensor(bbox_xywh)
+                print('xywhs: ', xywhs.shape)
                 confss = torch.Tensor(confs)
+                print('confss: ', confss.shape)
                 # Pass detection to Deep Sort
                 outputs = deepsort.update(xywhs, confss, im0)
                 # print(outputs)

@@ -23,11 +23,20 @@ from deep_sort.deep_sort import DeepSort
 from my_function import *
 from two_dim_map import TwoDimensionalMap
 
+# YOLO (80 objects)
+object_class = {0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorbike',
+                4: 'aeroplane', 5: 'bus', 6: 'train', 7: ' truck',
+                8: 'boat', 9: 'traffic light', 10: 'fire hydrant',
+                11: 'stop sign', 12: 'parking meter'}
+# MIO-TCD (11 objects)
+'''
+object_class = {}
+'''
+not_key = [4, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
 vehicles = ['person', 'bicycle', 'car', 'motorcycle', 'bus', 'truck']
 vehicle_color = {'person': (255, 0, 0), 'bicycle': (0, 255, 0), 'car': (0, 0, 255),
                  'motorcycle': (255, 255, 0), 'bus': (255, 0, 255), 'truck': (0, 255, 255)}
 is_deep_sort = True
-is_sort = False
 
 
 def draw_boxes(img, bbox, identities=None, offset=(0, 0)):
@@ -53,22 +62,22 @@ def detect(save_img=False):
         opt.save_dir, opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size
     webcam = source.isnumeric() or source.startswith(('rtsp://', 'rtmp://', 'http://')) or source.endswith('.txt')
 
-    # Initialize SORT
-    if is_sort:
-        mt = MyTrackingSort(lenRecord=30, distance_th=0.005, time_th=1)
-        mt.init_sort()
-
-    # Initialize Deep SORT
+    # ~ Initialize Deep SORT
+    # :todo Adjust parameters
     if is_deep_sort:
-        cfg = get_config()
-        cfg.merge_from_file('deep_sort/configs/deep_sort.yaml')
         deepsort = DeepSort('deep_sort/deep_sort/deep/checkpoint/ckpt.t7',
-                            max_dist=cfg.DEEPSORT.MAX_DIST, min_confidence=cfg.DEEPSORT.MIN_CONFIDENCE,
-                            nms_max_overlap=cfg.DEEPSORT.NMS_MAX_OVERLAP,
-                            max_iou_distance=cfg.DEEPSORT.MAX_IOU_DISTANCE,
-                            max_age=70, n_init=cfg.DEEPSORT.N_INIT, nn_budget=cfg.DEEPSORT.NN_BUDGET,
+                            max_dist=0.3, min_confidence=0.3,
+                            nms_max_overlap=1.0, max_iou_distance=0.7,
+                            max_age=70, n_init=3, nn_budget=100,
                             use_cuda=True)
-    past_box = {}
+
+    # ~ Initialize 2D Map
+    # :todo Save reference points in a configuration file
+    map2d = TwoDimensionalMap('map_2d')
+    map2d.setWH(1920, 1380)
+    ref_point = np.float32([[660, 485], [960, 510], [90, 835], [835, 940]])
+    dst_point = np.float32([[900, 815], [1300, 815], [900, 1265], [1300, 1265]])
+    map2d.setTransformation(ref_point, dst_point)
 
     # Initialize
     set_logging()
@@ -78,25 +87,11 @@ def detect(save_img=False):
     os.makedirs(out)  # make new dir
     half = device.type != 'cpu'  # half precision only supported on CUDA
 
-    # Initialize Template
-    map2d = TwoDimensionalMap('map_2d')
-    map2d.setWH(1920, 1380)
-    ref_point = np.float32([[660, 485], [960, 510], [90, 835], [835, 940]])
-    dst_point = np.float32([[900, 815], [1300, 815], [900, 1265], [1300, 1265]])
-    map2d.setTransformation(ref_point, dst_point)
-
     # Load model
     model = attempt_load(weights, map_location=device)  # load FP32 model
     imgsz = check_img_size(imgsz, s=model.stride.max())  # check img_size
     if half:
         model.half()  # to FP16
-
-    # Second-stage classifier
-    classify = False
-    if classify:
-        modelc = load_classifier(name='resnet101', n=2)  # initialize
-        modelc.load_state_dict(torch.load('weights/resnet101.pt', map_location=device)['model'])  # load weights
-        modelc.to(device).eval()
 
     # Set Dataloader
     vid_path, vid_writer = None, None
@@ -118,46 +113,40 @@ def detect(save_img=False):
     _ = model(img.half() if half else img) if device.type != 'cpu' else None  # run once
 
     for path, img, im0s, vid_cap in dataset:
-
-        time1 = time.time()
-
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
         if img.ndimension() == 3:
             img = img.unsqueeze(0)
 
+        time1 = time.time()
+
         # Inference
         t1 = time_synchronized()
         pred = model(img, augment=opt.augment)[0]
 
         # Apply NMS
-        pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
+        # pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
+        pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres,
+                                   classes=[0, 1, 2, 3, 5, 7], agnostic=opt.agnostic_nms)
         t2 = time_synchronized()
-
-        # Apply Classifier
-        if classify:
-            pred = apply_classifier(pred, modelc, img, im0s)
 
         # Process detections
         for i, det in enumerate(pred):  # detections per image
-
-            # Record each center point of detections
-            cp_det = []
-
-            map_tracking = np.ones(shape=(1080, 1920, 3), dtype=np.uint8) * 255
-            map2d.setWH(1920, 1380)
-
             if webcam:  # batch_size >= 1
                 p, s, im0 = path[i], '%g: ' % i, im0s[i].copy()
             else:
                 p, s, im0 = path, '', im0s
 
+            # ~ Update 2D Map Background
+            orig_im0 = np.copy(im0)
+            map2d.setWH(im0.shape[1], im0.shape[0])
+
             save_path = str(Path(out) / Path(p).name)
             txt_path = str(Path(out) / Path(p).stem) + ('_%g' % dataset.frame if dataset.mode == 'video' else '')
             s += '%gx%g ' % img.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
-            if det is not None and len(det):  # There is any detection
+            if det is not None and len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
 
@@ -166,25 +155,8 @@ def detect(save_img=False):
                     n = (det[:, -1] == c).sum()  # detections per class
                     s += '%g %ss, ' % (n, names[int(c)])  # add to string
 
-                bbox_xywh = []
-                confs = []
-
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
-                    # Convert X,Y X,Y format to X,Y W,H
-                    xywh = xyxy2xywh(torch.tensor(xyxy).view(1, 4))
-                    # Append center point to cp_det
-                    cp_det.append([int(xywh[0, 0]), int(xywh[0, 1])])
-
-                    if names[int(cls)] in vehicles:
-                        # Adapt detections to Deep SORT input format
-                        xywh = xyxy2xywh(torch.tensor(xyxy).view(1, 4))
-                        bbox_xywh.append(np.array(xywh[0]))
-                        confs.append([conf.item()])
-
-                        # new_cp = map2d.transformPoint((int(xywh[0, 0]), int(xywh[0, 1])))
-                        map2d.drawCircle((int(xywh[0, 0]), int(xywh[0, 1])), vehicle_color[names[int(cls)]])
-
                         if save_txt:  # Write to file
                             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                             line = (cls, conf, *xywh) if opt.save_conf else (cls, *xywh)  # label format
@@ -195,82 +167,37 @@ def detect(save_img=False):
                             label = '%s %.2f' % (names[int(cls)], conf)
                             plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
-                present_box = {}
-
-                # SORT
-                if is_sort:
-                    boxes = []
-                    for box in bbox_xywh:
-                        boxes.append(xywh_to_xyxy(box))
-                    ts = time.time()
-                    tracker = mt.update(boxes)
-                    mt.get_tracker(tracker, ts)
-                    trackDict = mt.get_array()
-                    # Visualization Detection
-                    for box in boxes:
-                        cv2.rectangle(im0, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (255, 255, 0), 2)
-                    # Visualization Tracking
-                    for objectId in list(trackDict):
-                        try:
-                            bbox = np.array(trackDict[objectId])[-1, 1]
-                        except:
-                            bbox = np.array(trackDict[objectId])[0, 1]
-                        # vis tracker bbox
-                        cv2.rectangle(im0, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])),
-                                      (0, 255, 255), 3)
-                        # vis id
-                        cv2.putText(im0, str(objectId), (int(bbox[0]), int(bbox[1])), 0, 5e-3 * 100, (0, 255, 0), 2)
-                        arrCentroid = np.array(trackDict[objectId])[:, 2]
-                        # vis line tracker obj
-                        for i, v in enumerate(arrCentroid):
-                            if i > 1:
-                                cv2.line(map_tracking, (int(arrCentroid[i][0]), int(arrCentroid[i][1])),
-                                         (int(arrCentroid[i - 1][0]), int(arrCentroid[i - 1][1])), (0, 255, 0), 2)
+                det = det.cpu().data.numpy()  # Convert Torch Tensor in GPU to Numpy Array in CPU
+                mask = np.zeros(det[:, 5].shape, dtype=np.bool)
+                for n in list(object_class.keys()):  # Delete row if object is not in object_class keys
+                    mask |= det[:, 5] == n
+                    # det = np.delete(det, np.where(det[:, 5] == n)[0], axis=0)
+                for ind, n in enumerate(mask):
+                    if not n:
+                        det = np.delete(det, ind, axis=0)
 
                 # Deep SORT
                 if is_deep_sort:
-                    xywhs = torch.Tensor(bbox_xywh)
-                    confss = torch.Tensor(confs)
                     # Pass detection to Deep Sort
-                    outputs = deepsort.update(xywhs, confss, im0)
+                    bbox = det[:, :4]
+                    bbox = xyxy_to_xywh_v2(bbox)
+                    confidence = det[:, 4]
+                    clss = det[:, 5]
+                    outputs = deepsort.update(bbox, confidence, orig_im0, cls=clss)
                     # print(outputs)
-                    # Draw boxes for visualization
-                    if len(outputs) > 0:
-                        bbox_xyxy = outputs[:, :4]
-                        identities = outputs[:, -1]
-                        for j, box in enumerate(bbox_xyxy):
-                            id_temp = identities[j]
-                            temp = xyxy_to_xywh(box)
-                            present_box[id_temp] = [temp[0], temp[1]]
-                        draw_boxes(im0, bbox_xyxy, identities)
-                        for key in present_box:
-                            cv2.circle(map_tracking, tuple(present_box[key]), 3, (0, 255, 0), 3)
-                        for key in present_box:
-                            if key in past_box:
-                                # Draw Line?
-                                cv2.line(map_tracking, tuple(past_box[key]), tuple(present_box[key]), (0, 0, 255), 3)
-                                # todo: check if the line intersects with imaginary line
-
-                past_box = present_box
+                    # Draw boxes
+                    for output in outputs:
+                        cv2.rectangle(im0, (output[0], output[1]), (output[2], output[3]), (255, 0, 255), 5)
+                        cv2.putText(im0, "ID: " + str(output[4]) + ' - ' + str(object_class[output[5]]),
+                                    (output[0], output[1]), 0, 1e-3*im0.shape[0], (255, 0, 255), 3)
 
             # Print time (inference + NMS)
             t3 = time.time()
             print('%sDone. (%.3fs)' % (s, t2 - t1))
 
-            perspective = cv2.warpPerspective(im0, map2d.matrix, (1920, 1280))
-            # Plot transformed center points
-            # cp_det = np.asanyarray(cp_det)
-            if 'cp_transform' in locals():
-                for cp in cp_transform:
-                    cv2.circle(perspective, tuple(cp), 5, (0, 0, 255), 5)
-
             # Stream results
             if view_img:
-                cv2.imshow('perspective', perspective)
                 cv2.imshow(p, im0)
-                # cv2.imshow('2D Map', map2d.source)
-                map2d.show()
-                cv2.imshow('Tracking', map_tracking)
                 if cv2.waitKey(1) == ord('q'):  # q to quit
                     raise StopIteration
 

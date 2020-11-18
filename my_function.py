@@ -49,6 +49,25 @@ def xyxy_to_xywh(xyxy):
     return np.array([int(x_temp), int(y_temp), int(w_temp), int(h_temp)])
 
 
+def xyxy_to_xywh_v2(xyxy):
+    """
+    Convert XYXY format (x,y top left and x,y bottom right) to XYWH format (x,y center point and width, height).
+    :param xyxy: [X1, Y1, X2, Y2]
+    :return: [X, Y, W, H]
+    """
+    if isinstance(xyxy, np.ndarray):
+        xywh = xyxy.copy()
+    elif isinstance(xyxy, torch.Tensor):
+        xywh = xyxy.clone()
+    else:
+        raise ValueError('xyxy type unknown.')
+    xywh[:, 2] = abs(xyxy[:, 2] - xyxy[:, 0])
+    xywh[:, 3] = abs(xyxy[:, 1] - xyxy[:, 3])
+    xywh[:, 0] = xywh[:, 0] + xywh[:, 2]/2
+    xywh[:, 1] = xywh[:, 1] + xywh[:, 3]/2
+    return xywh
+
+
 def xywh_to_xyxy(xywh):
     """
     Convert XYWH format (x,y center point and width, height) to XYXY format (x,y top left and x,y bottom right).

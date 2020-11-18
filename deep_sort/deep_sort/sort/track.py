@@ -1,4 +1,5 @@
 # vim: expandtab:ts=4:sw=4
+from collections import Counter
 
 
 class TrackState:
@@ -64,13 +65,16 @@ class Track:
     """
 
     def __init__(self, mean, covariance, track_id, n_init, max_age,
-                 feature=None):
+                 feature=None, cls=None):
         self.mean = mean
         self.covariance = covariance
         self.track_id = track_id
         self.hits = 1
         self.age = 1
         self.time_since_update = 0
+        self.det_cls = cls
+        self.counter = Counter()
+        self.cls = None
 
         self.state = TrackState.Tentative
         self.features = []
@@ -138,6 +142,9 @@ class Track:
         self.mean, self.covariance = kf.update(
             self.mean, self.covariance, detection.to_xyah())
         self.features.append(detection.feature)
+        self.counter[self.det_cls] += 1
+        self.cls = self.counter.most_common(1)[0][0]  # get most common cls for track
+
 
         self.hits += 1
         self.time_since_update = 0
