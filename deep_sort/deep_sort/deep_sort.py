@@ -23,7 +23,7 @@ class DeepSort(object):
         metric = NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
         self.tracker = Tracker(metric, max_iou_distance=max_iou_distance, max_age=max_age, n_init=n_init)
 
-    def update(self, bbox_xywh, confidences, ori_img, cls=None):
+    def update(self, bbox_xywh, confidences, ori_img, cls=None, return_number_of_object=False):
         self.height, self.width = ori_img.shape[:2]
         # generate detections
         features = self._get_features(bbox_xywh, ori_img)
@@ -46,6 +46,7 @@ class DeepSort(object):
         self.tracker.update(detections)
 
         # output bbox identities
+        number_of_object = {}
         outputs = []
         for track in self.tracker.tracks:
             if not track.is_confirmed() or track.time_since_update > 1:
@@ -56,11 +57,19 @@ class DeepSort(object):
             if cls is None:
                 outputs.append(np.array([x1, y1, x2, y2, track_id], dtype=np.int))
             else:
+                if track.cls in number_of_object:
+                    number_of_object[track.cls] += 1
+                else:
+                    number_of_object[track.cls] = 1
                 outputs.append(np.array([x1, y1, x2, y2, track_id, track.cls], dtype=np.int))
         if len(outputs) > 0:
             outputs = np.stack(outputs, axis=0)
-        print('outputs: ', outputs)
-        return outputs
+        # print('outputs: ', outputs)
+        # print(number_of_object)
+        if return_number_of_object:
+            return number_of_object, outputs
+        else:
+            return outputs
 
     """
     TODO:

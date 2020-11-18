@@ -78,6 +78,9 @@ def detect(save_img=False):
     ref_point = np.float32([[660, 485], [960, 510], [90, 835], [835, 940]])
     dst_point = np.float32([[900, 815], [1300, 815], [900, 1265], [1300, 1265]])
     map2d.setTransformation(ref_point, dst_point)
+    map2d.setLine((1146, 521), (1078, 648))
+    map2d.setLine((687, 465), (834, 476))
+    map2d.setLine((343, 585), (2, 774))
 
     # Initialize
     set_logging()
@@ -140,7 +143,11 @@ def detect(save_img=False):
 
             # ~ Update 2D Map Background
             orig_im0 = np.copy(im0)
-            map2d.setWH(im0.shape[1], im0.shape[0])
+            # map2d.setWH(im0.shape[1], im0.shape[0])
+            map2d.setSource(im0)
+
+            # ~ Window for Info
+            info_src = np.ones(shape=(800, 800, 3), dtype=np.uint8) * 255
 
             save_path = str(Path(out) / Path(p).name)
             txt_path = str(Path(out) / Path(p).stem) + ('_%g' % dataset.frame if dataset.mode == 'video' else '')
@@ -157,24 +164,24 @@ def detect(save_img=False):
 
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
-                        if save_txt:  # Write to file
-                            xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-                            line = (cls, conf, *xywh) if opt.save_conf else (cls, *xywh)  # label format
-                            with open(txt_path + '.txt', 'a') as f:
-                                f.write(('%g ' * len(line) + '\n') % line)
+                    if save_txt:  # Write to file
+                        xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+                        line = (cls, conf, *xywh) if opt.save_conf else (cls, *xywh)  # label format
+                        with open(txt_path + '.txt', 'a') as f:
+                            f.write(('%g ' * len(line) + '\n') % line)
 
-                        if save_img or view_img:  # Add bbox to image
-                            label = '%s %.2f' % (names[int(cls)], conf)
-                            plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
+                    if save_img or view_img:  # Add bbox to image
+                        label = '%s %.2f' % (names[int(cls)], conf)
+                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
                 det = det.cpu().data.numpy()  # Convert Torch Tensor in GPU to Numpy Array in CPU
-                mask = np.zeros(det[:, 5].shape, dtype=np.bool)
-                for n in list(object_class.keys()):  # Delete row if object is not in object_class keys
-                    mask |= det[:, 5] == n
-                    # det = np.delete(det, np.where(det[:, 5] == n)[0], axis=0)
-                for ind, n in enumerate(mask):
-                    if not n:
-                        det = np.delete(det, ind, axis=0)
+                # mask = np.zeros(det[:, 5].shape, dtype=np.bool)
+                # for n in list(object_class.keys()):  # Delete row if object is not in object_class keys
+                #     mask |= det[:, 5] == n
+                #     # det = np.delete(det, np.where(det[:, 5] == n)[0], axis=0)
+                # for ind, n in enumerate(mask):
+                #     if not n:
+                #         det = np.delete(det, ind, axis=0)
 
                 # Deep SORT
                 if is_deep_sort:
@@ -183,13 +190,18 @@ def detect(save_img=False):
                     bbox = xyxy_to_xywh_v2(bbox)
                     confidence = det[:, 4]
                     clss = det[:, 5]
-                    outputs = deepsort.update(bbox, confidence, orig_im0, cls=clss)
+                    number_of_object, outputs = deepsort.update(bbox, confidence, orig_im0, cls=clss,
+                                                                return_number_of_object=True)
+                    # Update 2D Map
+                    if outputs is not None and len(outputs):
+                        map2d.update(outputs[:, :4], outputs[:, 4], outputs[:, 5])
+
                     # print(outputs)
                     # Draw boxes
                     for output in outputs:
                         cv2.rectangle(im0, (output[0], output[1]), (output[2], output[3]), (255, 0, 255), 5)
                         cv2.putText(im0, "ID: " + str(output[4]) + ' - ' + str(object_class[output[5]]),
-                                    (output[0], output[1]), 0, 1e-3*im0.shape[0], (255, 0, 255), 3)
+                                    (output[0], output[1]), 0, 1e-3 * im0.shape[0], (255, 0, 255), 3)
 
             # Print time (inference + NMS)
             t3 = time.time()
@@ -197,7 +209,31 @@ def detect(save_img=False):
 
             # Stream results
             if view_img:
+                # ~ Show Info
+                if map2d.cross_counter is not None:
+                    info_text = '--- \n' \
+                                '- Line 0 -\n' \
+                                'Person: ' + str(map2d.cross_counter[0, 0]) + '\n'  \
+                                'Car: ' + str(map2d.cross_counter[0, 2]) + '\n'  \
+                                'Bus: ' + str(map2d.cross_counter[0, 5]) + '\n'  \
+                                'Truck: ' + str(map2d.cross_counter[0, 7]) + '\n \n'  \
+                                '- Line 1 -\n' \
+                                'Person: ' + str(map2d.cross_counter[1, 0]) + '\n'  \
+                                'Car: ' + str(map2d.cross_counter[1, 2]) + '\n'  \
+                                'Bus: ' + str(map2d.cross_counter[1, 5]) + '\n'  \
+                                'Truck: ' + str(map2d.cross_counter[1, 7]) + '\n \n'  \
+                                '- Line 2 -\n' \
+                                'Person: ' + str(map2d.cross_counter[2, 0]) + '\n' \
+                                'Car: ' + str(map2d.cross_counter[2, 2]) + '\n'  \
+                                'Bus: ' + str(map2d.cross_counter[2, 5]) + '\n'  \
+                                'Truck: ' + str(map2d.cross_counter[2, 7]) + '\n'  \
+                                '---'
+                    for j, text_line in enumerate(info_text.split('\n')):
+                        y = 50 + j*40
+                        cv2.putText(info_src, text_line, (50, y), 0, 1, (255, 0, 0), 2)
+                cv2.imshow('Info', info_src)
                 cv2.imshow(p, im0)
+                map2d.show()
                 if cv2.waitKey(1) == ord('q'):  # q to quit
                     raise StopIteration
 
