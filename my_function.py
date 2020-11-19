@@ -3,6 +3,7 @@ import os
 import shutil
 import time
 from pathlib import Path
+import mysql.connector
 
 import numpy as np
 import cv2
@@ -63,8 +64,8 @@ def xyxy_to_xywh_v2(xyxy):
         raise ValueError('xyxy type unknown.')
     xywh[:, 2] = abs(xyxy[:, 2] - xyxy[:, 0])
     xywh[:, 3] = abs(xyxy[:, 1] - xyxy[:, 3])
-    xywh[:, 0] = xywh[:, 0] + xywh[:, 2]/2
-    xywh[:, 1] = xywh[:, 1] + xywh[:, 3]/2
+    xywh[:, 0] = xywh[:, 0] + xywh[:, 2] / 2
+    xywh[:, 1] = xywh[:, 1] + xywh[:, 3] / 2
     return xywh
 
 
@@ -101,7 +102,35 @@ def point_perspective_transform(point, matrix):
 
 
 def rescale_frame(frame, percent=75):
-    width = int(frame.shape[1] * percent/ 100)
-    height = int(frame.shape[0] * percent/ 100)
+    width = int(frame.shape[1] * percent / 100)
+    height = int(frame.shape[0] * percent / 100)
     dim = (width, height)
     return cv2.resize(frame, dim, interpolation=cv2.INTER_AREA)
+
+
+class MySQL:
+    def __init__(self, host, database, user, password, table):
+        self.connection = mysql.connector.connect(
+            host=host,
+            database=database,
+            user=user,
+            password=password
+        )
+        self.table = table
+
+    def insert_crossing(self, timestamp, imaginary_line, object_id, object_class):
+        query = 'INSERT INTO ' + self.table + ' (timestamp, imaginary_line, object_id, object_class) VALUES (' + \
+            str(timestamp) + ', ' + str(imaginary_line), ', ' + str(object_id) + ', ' + str(object_class) + ')'
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query)
+            self.connection.commit()
+            print(cursor.rowcount, 'insert success.')
+            cursor.close()
+        except mysql.connection.Error as error:
+            print('failed to insert {}'.format(error))
+
+    def close(self):
+        if self.connection.is_connected():
+            self.connection.close()
+            print('MySQL connection is closed.')

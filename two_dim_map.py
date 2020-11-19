@@ -3,6 +3,12 @@ import numpy as np
 from configparser import ConfigParser
 import os
 import my_function
+import time
+import requests
+import json
+
+
+do_post_http = False
 
 
 class TwoDimensionalMap:
@@ -19,7 +25,14 @@ class TwoDimensionalMap:
         self.imaginary_line = []
         self.imaginary_line_color = (0, 255, 255)
         self.cross_counter = None
+        self.sql = None
         cv2.namedWindow(self.name)
+
+    def setSQL(self, host, database, user, password, table):
+        self.sql = my_function.MySQL(host, database, user, password, table)
+
+    def closeSQL(self):
+        self.sql.close()
 
     def setSource(self, src):
         self.original = src
@@ -167,8 +180,20 @@ class TwoDimensionalMap:
                     # Check if the present point is in the certain box
                     res, n = self._check_intersection([past_point, present_point])
                     if res:
-                        print('Intersect Detected: ' + str(n) + ' with ID: ' + str(
-                            i))  # todo: update log (timestamp, imaginary line number, vehicle type)
+                        print('Intersect Detected: ' + str(n) + ' with ID: ' + str(i))
+                        # todo: update log (timestamp, imaginary line number, vehicle type)
+                        log = {'timestamps': time.time(),
+                               'imaginary_line': int(n),
+                               'object_id': int(i),
+                               'object_class': int(self.present[num][2])
+                               }
+                        headers = {'Content-Type': 'application/json'}
+                        if do_post_http:
+                            response = requests.post('http://192.168.0.143:5000/api/traffic', data=json.dumps(log),
+                                                     headers=headers)
+                            print('post success. ', response)
+                        if self.sql is not None:
+                            self.sql.insert_crossing(time.time(), n, i, self.present[num][2])
                         cv2.line(self.source, (self.imaginary_line[n][0], self.imaginary_line[n][1]),
                                  (self.imaginary_line[n][2], self.imaginary_line[n][3]), (0, 0, 255), 3)
                         self.cross_counter[n, self.present[num][2]] += 1
@@ -182,8 +207,10 @@ class TwoDimensionalMap:
                     cv2.line(self.source, present_point, past_point, (0, 0, 255), 3)
                     res, n = self._check_intersection([past_point, present_point])
                     if res:
-                        print('Intersect Detected: ' + str(n) + ' with ID: ' + str(
-                            i))  # todo: update log (timestamp, imaginary line number, vehicle type)
+                        print('Intersect Detected: ' + str(n) + ' with ID: ' + str(i))
+                        # todo: update log (timestamp, imaginary line number, vehicle type)
+                        if self.sql is not None:
+                            self.sql.insert_crossing(time.time(), n, i, self.present[num][2])
                         cv2.line(self.source, (self.imaginary_line[n][0], self.imaginary_line[n][1]),
                                  (self.imaginary_line[n][2], self.imaginary_line[n][3]), (0, 0, 255), 3)
                         self.cross_counter[n, self.present[num][2]] += 1

@@ -23,6 +23,8 @@ from deep_sort.deep_sort import DeepSort
 from my_function import *
 from two_dim_map import TwoDimensionalMap
 
+debug_print = True
+
 # YOLO (80 objects)
 object_class = {0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorbike',
                 4: 'aeroplane', 5: 'bus', 6: 'train', 7: ' truck',
@@ -206,7 +208,8 @@ def detect(save_img=False):
 
                 # Print time (inference + NMS)
                 t3 = time.time()
-                print('%sDone. (%.3fs)' % (s, t2 - t1))
+                if debug_print:
+                    print('%sDone. (%.3fs)' % (s, t2 - t1))
 
                 # Stream results
                 if view_img:
@@ -256,7 +259,8 @@ def detect(save_img=False):
                         vid_writer.write(im0)
 
             dt = time.time() - time1
-            print('Total Time - FPS: %.5f - %.2f' % (dt, 1 / dt))
+            if debug_print:
+                print('Total Time - FPS: %.5f - %.2f' % (dt, 1 / dt))
 
         if save_txt or save_img:
             print('Results saved to %s' % Path(out))
