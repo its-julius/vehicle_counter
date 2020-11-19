@@ -99,8 +99,8 @@ class TwoDimensionalMap:
 
     def show(self):
         cv2.imshow(self.name, self.source)
-        if cv2.waitKey(1) == ord('q'):
-            raise StopIteration
+        # if cv2.waitKey(1) == ord('q'):
+        #     None  # raise StopIteration
 
     def saveConfigMatrix(self, fname, path='config/'):
         config = ConfigParser()
