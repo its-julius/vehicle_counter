@@ -31,13 +31,11 @@ object_class = {0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorbike',
                 8: 'boat', 9: 'traffic light', 10: 'fire hydrant',
                 11: 'stop sign', 12: 'parking meter'}
 # MIO-TCD (11 objects)
-'''
-object_class = {}
-'''
-not_key = [4, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
-vehicles = ['person', 'bicycle', 'car', 'motorcycle', 'bus', 'truck']
-vehicle_color = {'person': (255, 0, 0), 'bicycle': (0, 255, 0), 'car': (0, 0, 255),
-                 'motorcycle': (255, 255, 0), 'bus': (255, 0, 255), 'truck': (0, 255, 255)}
+# object_class = {0: 'articulated_truck', 1: 'bicycle', 2: 'bus', 3: 'car',
+#                 4: 'motorcycle', 5: 'motorized_vehicle', 6: 'non-motorized_vehicle',
+#                 7: 'pedestrian', 8: 'pickup_truck',
+#                 9: 'single_unit_truck', 10: 'work_van'}
+
 is_deep_sort = True
 
 
