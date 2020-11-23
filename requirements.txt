@@ -28,3 +28,9 @@ tqdm>=4.41.0
 # extras --------------------------------------
 # thop  # FLOPS computation
 # seaborn  # plotting
+
+# addition
+easydict >= 1.9
+filterpy >= 1.4.5
+
+

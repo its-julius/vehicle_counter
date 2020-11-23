@@ -39,24 +39,6 @@ object_class = {0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorbike',
 is_deep_sort = True
 
 
-def draw_boxes(img, bbox, identities=None, offset=(0, 0)):
-    for i, box in enumerate(bbox):
-        x1, y1, x2, y2 = [int(i) for i in box]
-        x1 += offset[0]
-        x2 += offset[0]
-        y1 += offset[1]
-        y2 += offset[1]
-        id = int(identities[i]) if identities is not None else 0
-        palette = (2 ** 11 - 1, 2 ** 15 - 1, 2 ** 20 - 1)
-        color = tuple([int((p * (id ** 2 - id + 1)) % 255) for p in palette])
-        label = '{}{:d}'.format("", id)
-        t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
-        cv2.rectangle(img, (x1, y1), (x2, y2), color, 3)
-        cv2.rectangle(img, (x1, y1), (x1 + t_size[0] + 3, y1 + t_size[1] + 4), color, -1)
-        cv2.putText(img, label, (x1, y1 + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 2, [255, 255, 255], 2)
-    return img
-
-
 def detect(save_img=False):
     try:
         out, source, weights, view_img, save_txt, imgsz = \
@@ -215,23 +197,23 @@ def detect(save_img=False):
                     if map2d.cross_counter is not None:
                         info_text = '--- \n' \
                                     '- Line 0 -\n' \
-                                    'Person: ' + str(map2d.cross_counter[0, 0]) + '\n'  \
-                                    'Car: ' + str(map2d.cross_counter[0, 2]) + '\n'  \
-                                    'Bus: ' + str(map2d.cross_counter[0, 5]) + '\n'  \
-                                    'Truck: ' + str(map2d.cross_counter[0, 7]) + '\n \n'  \
+                                    'Person: ' + str(map2d.cross_counter[0, 0]) + '\n' \
+                                    'Car: ' + str(map2d.cross_counter[0, 2]) + '\n' \
+                                    'Bus: ' + str(map2d.cross_counter[0, 5]) + '\n' \
+                                    'Truck: ' + str(map2d.cross_counter[0, 7]) + '\n \n' \
                                     '- Line 1 -\n' \
-                                    'Person: ' + str(map2d.cross_counter[1, 0]) + '\n'  \
-                                    'Car: ' + str(map2d.cross_counter[1, 2]) + '\n'  \
-                                    'Bus: ' + str(map2d.cross_counter[1, 5]) + '\n'  \
-                                    'Truck: ' + str(map2d.cross_counter[1, 7]) + '\n \n'  \
+                                    'Person: ' + str(map2d.cross_counter[1, 0]) + '\n' \
+                                    'Car: ' + str(map2d.cross_counter[1, 2]) + '\n' \
+                                    'Bus: ' + str(map2d.cross_counter[1, 5]) + '\n' \
+                                    'Truck: ' + str(map2d.cross_counter[1, 7]) + '\n \n' \
                                     '- Line 2 -\n' \
                                     'Person: ' + str(map2d.cross_counter[2, 0]) + '\n' \
-                                    'Car: ' + str(map2d.cross_counter[2, 2]) + '\n'  \
-                                    'Bus: ' + str(map2d.cross_counter[2, 5]) + '\n'  \
-                                    'Truck: ' + str(map2d.cross_counter[2, 7]) + '\n'  \
+                                    'Car: ' + str(map2d.cross_counter[2, 2]) + '\n' \
+                                    'Bus: ' + str(map2d.cross_counter[2, 5]) + '\n' \
+                                    'Truck: ' + str(map2d.cross_counter[2, 7]) + '\n' \
                                     '---'
                         for j, text_line in enumerate(info_text.split('\n')):
-                            y = 50 + j*40
+                            y = 50 + j * 40
                             cv2.putText(info_src, text_line, (50, y), 0, 1, (255, 0, 0), 2)
                     cv2.imshow('Info', info_src)
                     cv2.imshow(p, im0)

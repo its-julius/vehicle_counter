@@ -8,7 +8,8 @@ import requests
 import json
 
 
-do_post_http = False
+do_post_http = False  # True: post every crossing event in json format to http_address
+http_address = 'http://192.168.0.143:5000/api/traffic'  # http post address
 
 
 class TwoDimensionalMap:
@@ -28,11 +29,13 @@ class TwoDimensionalMap:
         self.sql = None
         cv2.namedWindow(self.name)
 
-    def setSQL(self, host, database, user, password, table):
-        self.sql = my_function.MySQL(host, database, user, password, table)
+    # deprecated.
+    # def setSQL(self, host, database, user, password, table):
+    #     self.sql = my_function.MySQL(host, database, user, password, table)
 
-    def closeSQL(self):
-        self.sql.close()
+    # deprecated.
+    # def closeSQL(self):
+    #     self.sql.close()
 
     def setSource(self, src):
         self.original = src
@@ -42,8 +45,6 @@ class TwoDimensionalMap:
         if len(self.imaginary_line):
             for l in self.imaginary_line:
                 cv2.line(self.source, (l[0], l[1]), (l[2], l[3]), self.imaginary_line_color, 3)
-        # cv2.imshow(self.name, self.source)
-        # cv2.waitKey(1)
 
     def setWH(self, width, height):
         self.width = width
@@ -53,8 +54,6 @@ class TwoDimensionalMap:
         if len(self.imaginary_line):
             for l in self.imaginary_line:
                 cv2.line(self.source, (l[0], l[1]), (l[2], l[3]), self.imaginary_line_color, 3)
-        # cv2.imshow(self.name, self.source)
-        # cv2.waitKey(1)
 
     def setTransformation(self, src_points, dst_points):
         if np.array(src_points).shape != (4, 2):
@@ -189,7 +188,7 @@ class TwoDimensionalMap:
                                }
                         headers = {'Content-Type': 'application/json'}
                         if do_post_http:
-                            response = requests.post('http://192.168.0.143:5000/api/traffic', data=json.dumps(log),
+                            response = requests.post(http_address, data=json.dumps(log),
                                                      headers=headers)
                             print('post success. ', response)
                         if self.sql is not None:
