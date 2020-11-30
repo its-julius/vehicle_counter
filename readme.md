@@ -1,7 +1,9 @@
 # Vehicle Counter
 
 ## Overview
-This program uses object detection: [YOLOv5 by ultralytics](https://github.com/ultralytics/yolov5) for vehicle detection and localization, and object tracking: [Deep Sort with PyTorch](https://github.com/ZQPei/deep_sort_pytorch), PyTorch implementation from original [Deep SORT](https://github.com/nwojke/deep_sort). Detection of vehicles crossing the imaginary line using matrix calculation. All events will be stored to the database in realtime using API.
+![1.jpg](1.jpg)
+This program uses object detection: [YOLOv5 by ultralytics](https://github.com/ultralytics/yolov5) for vehicle detection and localization, and object tracking: [Deep Sort with PyTorch](https://github.com/ZQPei/deep_sort_pytorch), PyTorch implementation from original [Deep SORT](https://github.com/nwojke/deep_sort). Detection of vehicles crossing the imaginary line using matrix calculation. All events will be stored to the database in realtime using API. ([Demo Video](https://www.youtube.com/watch?v=Od44wTbGYJk))
+ ![2.jpg](2.jpg)
 
 ## Requirements
 To install all the necessary requirements, run:
@@ -87,7 +89,7 @@ Please refer to the inline documentation on [point_capture.py](point_capture.py)
 To store all crossing events to the database with API via http post, edit line 10 in [two_dim_map.py](two_dim_map.py):
 ``` python
 do_post_http = False  # True: post every crossing event in json format to http_address
-http_address = 'http://192.168.0.143:5000/api/traffic'  # http post address
+http_address = 'ipaddress:port/path/api/url'  # http post address
 ```
 Set `do_post_http` True and change `http_address` to desired http post address. 
 
