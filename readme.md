@@ -2,7 +2,9 @@
 
 ## Overview
 ![1.jpg](1.jpg)
+
 This program uses object detection: [YOLOv5 by ultralytics](https://github.com/ultralytics/yolov5) for vehicle detection and localization, and object tracking: [Deep Sort with PyTorch](https://github.com/ZQPei/deep_sort_pytorch), PyTorch implementation from original [Deep SORT](https://github.com/nwojke/deep_sort). Detection of vehicles crossing the imaginary line using matrix calculation. All events will be stored to the database in realtime using API. ([Demo Video](https://www.youtube.com/watch?v=Od44wTbGYJk))
+
  ![2.jpg](2.jpg)
 
 ## Requirements
