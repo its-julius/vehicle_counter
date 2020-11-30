@@ -220,7 +220,7 @@ class TwoDimensionalMap:
         self.past = self.present
         # for search - end
 
-    def _check_intersection2(self, line):
+    def _check_intersection2(self, line):  # deprecated.
         if self.imaginary_line:
             intersection = []
             for num, i in enumerate(self.imaginary_line):
