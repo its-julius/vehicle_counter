@@ -7,7 +7,6 @@ import time
 import requests
 import json
 
-
 do_post_http = False  # True: post every crossing event in json format to http_address
 http_address = 'http://192.168.0.143:5000/api/traffic'  # http post address
 

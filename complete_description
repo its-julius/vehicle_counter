@@ -1,0 +1,51 @@
+cctv_recorder.py
+>> Record online CCTV
+How to use:
+- Change url variable to online CCTV URL
+- Keyboard Interrupt to stop recording
+
+copy_datasets.py
+>> Move a large number of files / datasets
+- move_ext(src, dst, ext)
+>> Move files based on its extension
+- move_n(src, dst, n)
+>> Move n number of files
+- move_list(src, dst, fn_list, ext)
+>> Move files based on list of name
+(details on inline documentation)
+
+cuda_check.py
+>> Check CUDA on PyTorch availability
+Hot to use:
+- Run the code
+
+point_capture.py
+>> Capture point coordinate on a video
+How to use:
+- Run 'python point_capture.py --source /video/path.ext' (--rescale if needed)
+- Hit SPACEBAR to pause or resume the video
+- Left click when the video pauses to mark the reference point
+- Right click to remove the reference point
+- Press ESC to exit the program
+
+traffic_mapping.py
+>> Map traffic CCTV to 2D Map
+How to use:
+- Change cap url
+- Change ref_point and dst_point according to its transformation matrix
+
+Traffic Counter
+---
+## How to set imaginary line:
+1. Run 'python3 point_capture.py --source /video/path.ext' (--rescale if needed)
+2. Hit SPACEBAR to pause or resume the video
+3. Left click when the video pauses to mark the reference point (save / write down the reference point)
+4. Right click to remove the reference point
+5. Press ESC to exit the program
+6. Open detect4.py, edit and insert imaginary line reference point at: 
+` map2d.setLine((x1, y1), (x2, y2)) `
+
+
+## How to use crossing counter
+1. Run 'python3 detect4.py --source #stream link or video path# --view-img
+ex. python detect4.py --source demo_videos/8.mp4 --view-img
