@@ -17,16 +17,16 @@ $ pip3 install -r requirements.txt
 List of requirements:
 ``` bash
 Cython
-matplotlib>=3.2.2
-numpy>=1.18.5
-opencv-python>=4.1.2
+matplotlib >= 3.2.2
+numpy >= 1.18.5
+opencv-python >= 4.1.2
 pillow
-PyYAML>=5.3
-scipy>=1.4.1
-tensorboard>=2.2
-torch>=1.6.0
-torchvision>=0.7.0
-tqdm>=4.41.0
+PyYAML >= 5.3
+scipy >= 1.4.1
+tensorboard >= 2.2
+torch >= 1.6.0
+torchvision >= 0.7.0
+tqdm >= 4.41.0
 easydict >= 1.9
 filterpy >= 1.4.5
 scikit-image >= 0.17.2
@@ -103,3 +103,7 @@ body = {'timestamps': float(timestamp),
         'object_id': int(vehicle_id),
         'object_class': int(type_of_vehicle)}                        
 ```
+
+## Block Diagram
+
+![Block Diagram](block_diagram.png)
